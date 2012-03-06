@@ -96,6 +96,7 @@ if __name__ == '__main__':
     surf = cv2.SURF(400,4,4,extended)
     kp_master_logo, desc_master_logo = surf.detect(gray_Master_logo, None, False)
     desc_master_logo.shape = (-1, surf.descriptorSize()) 
+    print "number of features in the master logo: ", len(kp_master_logo)
     surf = cv2.SURF(1000,4,4,extended)
     #cv2.startWindowThread()
     cv2.namedWindow("test")
@@ -118,12 +119,15 @@ if __name__ == '__main__':
             gray_frame=cv2.cvtColor(frame, cv2.cv.CV_RGB2GRAY) 
             ds_gray_frame=cv2.pyrDown(gray_frame)
             #ds_gray_frame=cv2.pyrDown(ds_gray_frame)
-            kp_frame, desc_frame = surf.detect(ds_gray_frame, None, False)
+            kp_frame, desc_frame = surf.detect(ds_gray_frame, None,False)
+            crnr= cv2.goodFeaturesToTrack(ds_gray_frame,10, 0.04, 1.0 )
+            print crnr
+            sys.exit(0)
             try:
                  #cv2.waitKey()     
                  desc_frame.shape = (-1, surf.descriptorSize())
             except:
-                 print "frame with no or insignificant features, skiped"    
+                 print "frame with no or insignificant features, skipped"    
                  continue  
             #m = match_flann(desc_frame, desc_master_logo)
             m = match(match_flann,desc_frame, desc_master_logo)
