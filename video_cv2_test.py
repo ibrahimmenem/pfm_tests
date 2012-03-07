@@ -6,12 +6,46 @@ from common import anorm
 from time import time
 #sudo apt-get install python-matplotlib
 help_message = '''
-USAGE: video_cv2_pythn.py [ <video file full path> <logo file full path> <64 | 128> <BF|FLANN>]
+USAGE: video_cv2_pythn.py [ <video file full path> <logo file full path> <64 | 128> <BF|FLANN> <FPS>]
 '''
-FLANN_INDEX_KDTREE = 1  # bug: flann enums are missing
+FLANN_INDEX_KDTREE = 1  
+flann_params = dict(algorithm = FLANN_INDEX_KDTREE,trees = 4)
 
-flann_params = dict(algorithm = FLANN_INDEX_KDTREE,
-                    trees = 4)
+#goodFeaturesToTrack(image, maxCorners, qualityLevel, minDistance[, corners[, mask[, blockSize[, useHarrisDetector[, k]]]]]) -> corners
+def sort_keypoints_and_descriptors(kps,dsc,by):
+     kp_ds=zip(kps,dsc)
+     if by=='size':
+         sortedzip = sorted(kp_ds, key=lambda x: x[0].size, reverse=True)
+     if by=='stringth': 
+         sortedzip = sorted(kp_ds, key=lambda x: x[0].response, reverse=True)
+     if by=='octave': 
+         sortedzip = sorted(kp_ds, key=lambda x: x[0].octave, reverse=True)
+     if by=='angle': 
+         sortedzip = sorted(kp_ds, key=lambda x: x[0].angle, reverse=True)
+     sortedkp,sorteddesc=zip(*sortedzip)
+     return sortedkp,sorteddesc
+     
+def extract_features_from_logo(gray_Master_logo,extended):   
+    surf = cv2.SURF(0,4,4,extended) # gives large numbers of features
+    kp_master_logo, desc_master_logo = surf.detect(gray_Master_logo, None, False)
+    desc_master_logo.shape = (-1, surf.descriptorSize()) 
+    for p  in kp_master_logo:
+          print p.pt, p.size, p.angle, p.response, p.octave, p.class_id, '\n'
+          cv2.circle(gray_Master_logo, (int(p.pt[0]),int(p.pt[1])) ,3,  cv2.cv.Scalar(0, 0, 255, 0), thickness=1, lineType=4)#lineType=cv2.CV_AA
+    print "/////////////////////////////////////////////////"
+    print "/////////////////////////////////////////////////"
+    print "/////////////////////////////////////////////////"
+    kp_master_logo, desc_master_logo =sort_keypoints_and_descriptors(kp_master_logo,desc_master_logo,'size')
+    for p  in kp_master_logo:
+          print p.pt, p.size, p.angle, p.response, p.octave, p.class_id, '\n'
+    #gftt_corners= cv2.goodFeaturesToTrack(gray_Master_logo,40, 0.04, 1.0)
+    #print gftt_corners
+    #for p in gftt_corners:
+    #      cv2.circle(gray_Master_logo, (int(p[0][0]),int(p[0][1])) ,7,  cv2.cv.Scalar(0, 0, 255, 0), thickness=2, lineType=4)#lineType=cv2.CV_AA          
+    cv2.imshow("features from logo",gray_Master_logo)
+    
+    return kp_master_logo , desc_master_logo
+    
 def match(match_func,desc1, desc2,):
 	m=match_func(desc1,desc2)
 	return m
@@ -65,16 +99,17 @@ def export_features(x,y,y1):
 
 if __name__ == '__main__':
     try: 
-        video_fn, logo_fn, desclength,matchfunction = sys.argv[1:5]
+        video_fn, logo_fn, desclength,matchfunction, DS_rate= sys.argv[1:6]
         video_capture=cv2.VideoCapture(video_fn)
         video_capture.open(video_fn) 
         gray_Master_logo= cv2.imread(logo_fn, 0) 
         extended= (0, 1)[desclength=='128']
         match_function=(match_flann,match_bruteforce)[matchfunction=='BF']
+        DS_rate=int(DS_rate)
     except ValueError:
         print  "*** No or bad input args!\n", help_message
         sys.exit(1)     
-    dir=os.path.split(video_fn)[1] +desclength+matchfunction
+    dir=os.path.split(video_fn)[1]+"_"+os.path.split(logo_fn)[1]+"_len:"+desclength+"_"+matchfunction+"_fps:"+str(DS_rate)
     try: 
           os.system("rm -r "+dir)
           os.system("mkdir "+dir)
@@ -84,22 +119,19 @@ if __name__ == '__main__':
     retval,frame=video_capture.read()
     props= ReadVideoProps(video_capture)
     print props
-    FRAME_WIDTH=int(props['FRAME_WIDTH'])
-    FRAME_HEIGHT=int(props['FRAME_HEIGHT'])
+    #FRAME_WIDTH=int(props['FRAME_WIDTH'])
+    #FRAME_HEIGHT=int(props['FRAME_HEIGHT'])
     FPS=int(props['FPS'])
     FRAME_COUNT=int(props['FRAME_COUNT'])
     Read_Frames=0
-    DS_rate=1# (1 to FPS) frame per secound
     #Estimated_Video_Length=float(FRAME_COUNT)/FPS
     #gray_frame=cv2.cv.CreateMatND((FRAME_WIDTH ,FRAME_HEIGHT) , cv2.CV_8UC1)# CreateImage(, cv2.cv.IPL_DEPTH_8U, 1)
     # ds_gray_frame=CreateImage((FRAME_WIDTH/2 ,FRAME_HEIGHT/2), cv2.cv.IPL_DEPTH_8U, 1)
-    surf = cv2.SURF(400,4,4,extended)
-    kp_master_logo, desc_master_logo = surf.detect(gray_Master_logo, None, False)
-    desc_master_logo.shape = (-1, surf.descriptorSize()) 
+    kp_master_logo, desc_master_logo = extract_features_from_logo(gray_Master_logo,extended) 
     print "number of features in the master logo: ", len(kp_master_logo)
     surf = cv2.SURF(1000,4,4,extended)
     #cv2.startWindowThread()
-    cv2.namedWindow("test")
+    #cv2.namedWindow("test")
     t_start=time()
     matched_features=np.array([])
     sampling_times=np.array([])
@@ -113,16 +145,10 @@ if __name__ == '__main__':
                   print "All frames have been read!"   
                   break
             retval,frame=video_capture.retrieve()
-            #if retval==False:
-            #     print "All frames have been read!"   
-            #     break
             gray_frame=cv2.cvtColor(frame, cv2.cv.CV_RGB2GRAY) 
             ds_gray_frame=cv2.pyrDown(gray_frame)
             #ds_gray_frame=cv2.pyrDown(ds_gray_frame)
             kp_frame, desc_frame = surf.detect(ds_gray_frame, None,False)
-            crnr= cv2.goodFeaturesToTrack(ds_gray_frame,10, 0.04, 1.0 )
-            print crnr
-            sys.exit(0)
             try:
                  #cv2.waitKey()     
                  desc_frame.shape = (-1, surf.descriptorSize())
@@ -144,9 +170,9 @@ if __name__ == '__main__':
 
     total_time=time()-t_start
     for t,num_features in zip(sampling_times,matched_features):
-          features_txt_file.write(str(num_features)+" features matched @ " +str(t)+"\n")
+          features_txt_file.write(str(num_features)+"\t features, matched\t @ " +str(t)+"\n")
     features_txt_file.close()
-    print "Total execution time=", total_time
+    print "Total execution time=", total_time, "sec"
     export_features(sampling_times,matched_features,number_of_features)
     cv2.waitKey()     
     video_capture.release()
