@@ -13,31 +13,41 @@ flann_params = dict(algorithm = FLANN_INDEX_KDTREE,trees = 4)
 
 #goodFeaturesToTrack(image, maxCorners, qualityLevel, minDistance[, corners[, mask[, blockSize[, useHarrisDetector[, k]]]]]) -> corners
 def sort_keypoints_and_descriptors(kps,dsc,by):
-     kp_ds=zip(kps,dsc)
+     #creating dict to map points to dscs  (not using zip because it returns tuple and I want numpy.ndarray)
+     kp2dsc_dict={}
+     for i in range(len(kps)):
+           kp2dsc_dict[kps[i]]=dsc[i,:]
+     #print kp2dsc_dict
+     # sorting the keypoints list
      if by=='size':
-         sortedzip = sorted(kp_ds, key=lambda x: x[0].size, reverse=True)
+         sortedkps = sorted(kps, key=lambda item:item.size, reverse=False) # True= larger is at kps[0]
      if by=='stringth': 
-         sortedzip = sorted(kp_ds, key=lambda x: x[0].response, reverse=True)
+         sortedkps = sorted(kps, key=lambda item:item.response, reverse=True)
      if by=='octave': 
-         sortedzip = sorted(kp_ds, key=lambda x: x[0].octave, reverse=True)
+         sortedkps = sorted(kps, key=lambda item: item.octave, reverse=True)
      if by=='angle': 
-         sortedzip = sorted(kp_ds, key=lambda x: x[0].angle, reverse=True)
-     sortedkp,sorteddesc=zip(*sortedzip)
-     return sortedkp,sorteddesc
+         sortedkps = sorted(kps, key=lambda item: item.angle, reverse=True)
+     # construct sorted desc from the kp2dsc_dict and the sorted keypoints
+     sorteddsc=np.vstack((kp2dsc_dict[kps[0]],kp2dsc_dict[kps[1]])) 
+     for i in range(2,len(kps)):
+          sorteddsc=np.vstack((sorteddsc,kp2dsc_dict[kps[i]])) 
+     #print sorteddsc
+     return list(sortedkps), sorteddsc 
      
 def extract_features_from_logo(gray_Master_logo,extended):   
-    surf = cv2.SURF(0,4,4,extended) # gives large numbers of features
+    surf = cv2.SURF(22500,2,1,extended) # gives large number of features
     kp_master_logo, desc_master_logo = surf.detect(gray_Master_logo, None, False)
     desc_master_logo.shape = (-1, surf.descriptorSize()) 
     for p  in kp_master_logo:
           print p.pt, p.size, p.angle, p.response, p.octave, p.class_id, '\n'
           cv2.circle(gray_Master_logo, (int(p.pt[0]),int(p.pt[1])) ,3,  cv2.cv.Scalar(0, 0, 255, 0), thickness=1, lineType=4)#lineType=cv2.CV_AA
-    print "/////////////////////////////////////////////////"
-    print "/////////////////////////////////////////////////"
-    print "/////////////////////////////////////////////////"
     kp_master_logo, desc_master_logo =sort_keypoints_and_descriptors(kp_master_logo,desc_master_logo,'size')
+    print "after sort"
     for p  in kp_master_logo:
           print p.pt, p.size, p.angle, p.response, p.octave, p.class_id, '\n'
+          cv2.circle(gray_Master_logo, (int(p.pt[0]),int(p.pt[1])) ,3,  cv2.cv.Scalar(0, 0, 255, 0), thickness=1, lineType=4)#lineType=cv2.CV_AA
+    #for p  in kp_master_logo:
+    #      print p.pt, p.size, p.angle, p.response, p.octave, p.class_id, '\n'
     #gftt_corners= cv2.goodFeaturesToTrack(gray_Master_logo,40, 0.04, 1.0)
     #print gftt_corners
     #for p in gftt_corners:
@@ -128,6 +138,7 @@ if __name__ == '__main__':
     #gray_frame=cv2.cv.CreateMatND((FRAME_WIDTH ,FRAME_HEIGHT) , cv2.CV_8UC1)# CreateImage(, cv2.cv.IPL_DEPTH_8U, 1)
     # ds_gray_frame=CreateImage((FRAME_WIDTH/2 ,FRAME_HEIGHT/2), cv2.cv.IPL_DEPTH_8U, 1)
     kp_master_logo, desc_master_logo = extract_features_from_logo(gray_Master_logo,extended) 
+
     print "number of features in the master logo: ", len(kp_master_logo)
     surf = cv2.SURF(1000,4,4,extended)
     #cv2.startWindowThread()
@@ -169,6 +180,10 @@ if __name__ == '__main__':
             #      break
 
     total_time=time()-t_start
+    features_txt_file.write(
+'\n==============================VIDEO FEATURES==============================\n'
++''.join([' %s: %s \n' % (key, value) for (key, value) in props.items()])+
+'\n=============================MATCHED FEATURES=============================\n')
     for t,num_features in zip(sampling_times,matched_features):
           features_txt_file.write(str(num_features)+"\t features, matched\t @ " +str(t)+"\n")
     features_txt_file.close()
