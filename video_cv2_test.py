@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import sys ,os
 import cv2 
 import binascii
@@ -20,34 +21,37 @@ def sort_keypoints_and_descriptors(kps,dsc,by):
      #print kp2dsc_dict
      # sorting the keypoints list
      if by=='size':
-         sortedkps = sorted(kps, key=lambda item:item.size, reverse=False) # True= larger is at kps[0]
+         sortedkps = sorted(kps, key=lambda item:item.size, reverse=True) # True= larger is at kps[0]
      if by=='stringth': 
          sortedkps = sorted(kps, key=lambda item:item.response, reverse=True)
      if by=='octave': 
          sortedkps = sorted(kps, key=lambda item: item.octave, reverse=True)
      if by=='angle': 
          sortedkps = sorted(kps, key=lambda item: item.angle, reverse=True)
+     #select the first 20%  of sorted keypoints
+     sortedkps=sortedkps[:int(0.2*len(sortedkps))]
      # construct sorted desc from the kp2dsc_dict and the sorted keypoints
-     sorteddsc=np.vstack((kp2dsc_dict[kps[0]],kp2dsc_dict[kps[1]])) 
-     for i in range(2,len(kps)):
-          sorteddsc=np.vstack((sorteddsc,kp2dsc_dict[kps[i]])) 
+     sorteddsc=np.vstack((kp2dsc_dict[sortedkps[0]],kp2dsc_dict[sortedkps[1]])) 
+     for i in range(2,len(sortedkps)):
+          sorteddsc=np.vstack((sorteddsc,kp2dsc_dict[sortedkps[i]])) 
      #print sorteddsc
      return list(sortedkps), sorteddsc 
      
 def extract_features_from_logo(gray_Master_logo,extended):   
-    surf = cv2.SURF(22500,2,1,extended) # gives large number of features
+    surf = cv2.SURF(100,4,4,extended) # gives large number of features
     kp_master_logo, desc_master_logo = surf.detect(gray_Master_logo, None, False)
     desc_master_logo.shape = (-1, surf.descriptorSize()) 
-    for p  in kp_master_logo:
-          print p.pt, p.size, p.angle, p.response, p.octave, p.class_id, '\n'
-          cv2.circle(gray_Master_logo, (int(p.pt[0]),int(p.pt[1])) ,3,  cv2.cv.Scalar(0, 0, 255, 0), thickness=1, lineType=4)#lineType=cv2.CV_AA
-    kp_master_logo, desc_master_logo =sort_keypoints_and_descriptors(kp_master_logo,desc_master_logo,'size')
-    print "after sort"
-    for p  in kp_master_logo:
-          print p.pt, p.size, p.angle, p.response, p.octave, p.class_id, '\n'
-          cv2.circle(gray_Master_logo, (int(p.pt[0]),int(p.pt[1])) ,3,  cv2.cv.Scalar(0, 0, 255, 0), thickness=1, lineType=4)#lineType=cv2.CV_AA
     #for p  in kp_master_logo:
     #      print p.pt, p.size, p.angle, p.response, p.octave, p.class_id, '\n'
+    #      cv2.circle(gray_Master_logo, (int(p.pt[0]),int(p.pt[1])) ,3,  cv2.cv.Scalar(0, 0, 255, 0), thickness=1, lineType=4)#lineType=cv2.CV_AA
+    kp_master_logo, desc_master_logo =sort_keypoints_and_descriptors(kp_master_logo,desc_master_logo,'size')
+
+    #print "after sort"
+    #print "after sort"
+    for p  in kp_master_logo:
+          print p.pt, p.size, p.angle, p.response, p.octave, p.class_id, '\n'
+          cv2.circle(gray_Master_logo, (int(p.pt[0]),int(p.pt[1])) ,3,  cv2.cv.Scalar(0, 0, 255, 0), thickness=1, lineType=4)#lineType=cv2.CV_AA
+
     #gftt_corners= cv2.goodFeaturesToTrack(gray_Master_logo,40, 0.04, 1.0)
     #print gftt_corners
     #for p in gftt_corners:
