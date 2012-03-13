@@ -7,17 +7,30 @@ from common import anorm
 from time import time
 #sudo apt-get install python-matplotlib
 help_message = '''
-USAGE: video_cv2_pythn.py [ <video file full path> <logo file full path> <64 | 128> <BF|FLANN> <FPS>]
+USAGE: video_cv2_pythn.py [ <video file full path> <logo file full path> <64 | 128> <BF|FLANN> <FPS> <size|octave|angle|stringth > <(0->100)> <GFTT>]
 '''
 FLANN_INDEX_KDTREE = 1  
 flann_params = dict(algorithm = FLANN_INDEX_KDTREE,trees = 4)
 
-#goodFeaturesToTrack(image, maxCorners, qualityLevel, minDistance[, corners[, mask[, blockSize[, useHarrisDetector[, k]]]]]) -> corners
-def sort_keypoints_and_descriptors(kps,dsc,by):
-     #creating dict to map points to dscs  (not using zip because it returns tuple and I want numpy.ndarray)
-     kp2dsc_dict={}
-     for i in range(len(kps)):
-           kp2dsc_dict[kps[i]]=dsc[i,:]
+def find_GFTT(gray_Master_logo,kp_master_logo,kp2dsc_dict):
+    #goodFeaturesToTrack(image, maxCorners, qualityLevel, minDistance[, corners[, mask[, blockSize[, useHarrisDetector[, k]]]]]) -> corners
+     gftt_corners= cv2.goodFeaturesToTrack(gray_Master_logo,40, 0.04, 1.0)
+     ###for p in gftt_corners:
+     ###     cv2.circle(gray_Master_logo, (int(p[0][0]),int(p[0][1])) ,7,  cv2.cv.Scalar(0, 0, 255, 0), thickness=2, lineType=4)#lineType=cv2.CV_AA          
+     #selecting from kp_master_logo the keypoint near to gftt_corners
+     selectedkps=[]
+     for gp in gftt_corners:
+           for kp in kp_master_logo:
+                 if  (abs(kp.pt[0] - gp[0,0]) < 2)	 and (abs(kp.pt[1] - gp[0,1]) < 2):
+                      selectedkps.append(kp)
+     print selectedkps
+     # construct selecteddesc from the kp2dsc_dict and the selected keypoints
+     selecteddescs=np.vstack((kp2dsc_dict[selectedkps[0]],kp2dsc_dict[selectedkps[1]])) 
+     for i in range(2,len(selectedkps)):
+          selecteddescs=np.vstack((selecteddescs,kp2dsc_dict[selectedkps[i]])) 
+     return selectedkps , selecteddescs
+        
+def sort_keypoints_and_descriptors(kps,kp2dsc_dict,by,percent):
      #print kp2dsc_dict
      # sorting the keypoints list
      if by=='size':
@@ -29,7 +42,7 @@ def sort_keypoints_and_descriptors(kps,dsc,by):
      if by=='angle': 
          sortedkps = sorted(kps, key=lambda item: item.angle, reverse=True)
      #select the first 20%  of sorted keypoints
-     sortedkps=sortedkps[:int(0.2*len(sortedkps))]
+     sortedkps=sortedkps[:int((percent/100)*len(sortedkps))]
      # construct sorted desc from the kp2dsc_dict and the sorted keypoints
      sorteddsc=np.vstack((kp2dsc_dict[sortedkps[0]],kp2dsc_dict[sortedkps[1]])) 
      for i in range(2,len(sortedkps)):
@@ -37,27 +50,27 @@ def sort_keypoints_and_descriptors(kps,dsc,by):
      #print sorteddsc
      return list(sortedkps), sorteddsc 
      
-def extract_features_from_logo(gray_Master_logo,extended):   
+def extract_features_from_logo(gray_Master_logo,extended,by,percent,dir,gftt):   
     surf = cv2.SURF(100,4,4,extended) # gives large number of features
     kp_master_logo, desc_master_logo = surf.detect(gray_Master_logo, None, False)
     desc_master_logo.shape = (-1, surf.descriptorSize()) 
-    #for p  in kp_master_logo:
-    #      print p.pt, p.size, p.angle, p.response, p.octave, p.class_id, '\n'
-    #      cv2.circle(gray_Master_logo, (int(p.pt[0]),int(p.pt[1])) ,3,  cv2.cv.Scalar(0, 0, 255, 0), thickness=1, lineType=4)#lineType=cv2.CV_AA
-    kp_master_logo, desc_master_logo =sort_keypoints_and_descriptors(kp_master_logo,desc_master_logo,'size')
-
-    #print "after sort"
-    #print "after sort"
+    #creating dict to map points to dscs  (not using zip because it returns tuple and I want numpy.ndarray)
+    kp2dsc_dict={}
+    for i in range(len(kp_master_logo)):
+           kp2dsc_dict[kp_master_logo[i]]=desc_master_logo[i,:]
+    # sort keypoints according to by, and select the percent represented by percent
+    kp_master_logo, desc_master_logo =sort_keypoints_and_descriptors(kp_master_logo,kp2dsc_dict,by,float(percent))
+    print "after sort"
     for p  in kp_master_logo:
           print p.pt, p.size, p.angle, p.response, p.octave, p.class_id, '\n'
           cv2.circle(gray_Master_logo, (int(p.pt[0]),int(p.pt[1])) ,3,  cv2.cv.Scalar(0, 0, 255, 0), thickness=1, lineType=4)#lineType=cv2.CV_AA
-
-    #gftt_corners= cv2.goodFeaturesToTrack(gray_Master_logo,40, 0.04, 1.0)
-    #print gftt_corners
-    #for p in gftt_corners:
-    #      cv2.circle(gray_Master_logo, (int(p[0][0]),int(p[0][1])) ,7,  cv2.cv.Scalar(0, 0, 255, 0), thickness=2, lineType=4)#lineType=cv2.CV_AA          
+    if gftt=="gftt":
+          kp_master_logo, desc_master_logo=find_GFTT(gray_Master_logo,kp_master_logo,kp2dsc_dict)
+    for p  in kp_master_logo:
+          print p.pt, p.size, p.angle, p.response, p.octave, p.class_id, '\n'
+          cv2.circle(gray_Master_logo, (int(p.pt[0]),int(p.pt[1])) ,5,  cv2.cv.Scalar(0, 0, 255, 0), thickness=1, lineType=4)
     cv2.imshow("features from logo",gray_Master_logo)
-    
+    cv2.imwrite("./"+dir+"/featuresfromlogo.png",gray_Master_logo)
     return kp_master_logo , desc_master_logo
     
 def match(match_func,desc1, desc2,):
@@ -113,17 +126,18 @@ def export_features(x,y,y1):
 
 if __name__ == '__main__':
     try: 
-        video_fn, logo_fn, desclength,matchfunction, DS_rate= sys.argv[1:6]
+        video_fn, logo_fn = sys.argv[1:3]  
+        desclength,matchfunction, DS_rate,logoKPsort,logoKPsortpercent,gftt=[x.lower() for x in sys.argv[3:9] ]
         video_capture=cv2.VideoCapture(video_fn)
         video_capture.open(video_fn) 
         gray_Master_logo= cv2.imread(logo_fn, 0) 
         extended= (0, 1)[desclength=='128']
-        match_function=(match_flann,match_bruteforce)[matchfunction=='BF']
+        match_function=(match_flann,match_bruteforce)[matchfunction=='bf']
         DS_rate=int(DS_rate)
     except ValueError:
         print  "*** No or bad input args!\n", help_message
         sys.exit(1)     
-    dir=os.path.split(video_fn)[1]+"_"+os.path.split(logo_fn)[1]+"_len:"+desclength+"_"+matchfunction+"_fps:"+str(DS_rate)
+    dir=os.path.split(video_fn)[1]+"_"+os.path.split(logo_fn)[1]+"_len:"+desclength+"_"+matchfunction+"_fps:"+str(DS_rate)+"_sort:"+logoKPsort+"_"+logoKPsortpercent
     try: 
           os.system("rm -r "+dir)
           os.system("mkdir "+dir)
@@ -141,7 +155,7 @@ if __name__ == '__main__':
     #Estimated_Video_Length=float(FRAME_COUNT)/FPS
     #gray_frame=cv2.cv.CreateMatND((FRAME_WIDTH ,FRAME_HEIGHT) , cv2.CV_8UC1)# CreateImage(, cv2.cv.IPL_DEPTH_8U, 1)
     # ds_gray_frame=CreateImage((FRAME_WIDTH/2 ,FRAME_HEIGHT/2), cv2.cv.IPL_DEPTH_8U, 1)
-    kp_master_logo, desc_master_logo = extract_features_from_logo(gray_Master_logo,extended) 
+    kp_master_logo, desc_master_logo = extract_features_from_logo(gray_Master_logo,extended,logoKPsort,logoKPsortpercent,dir,gftt) 
 
     print "number of features in the master logo: ", len(kp_master_logo)
     surf = cv2.SURF(1000,4,4,extended)
