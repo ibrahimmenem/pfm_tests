@@ -37,70 +37,99 @@ def spacial_downscale_function(spacial_DS):
 
 def find_GFTT(gray_Master_logo,kp_master_logo,kp2dsc_dict):
     #goodFeaturesToTrack(image, maxCorners, qualityLevel, minDistance[, corners[, mask[, blockSize[, useHarrisDetector[, k]]]]]) -> corners
-     gftt_corners= cv2.goodFeaturesToTrack(gray_Master_logo,40, 0.04, 1.0)
+     gftt_corners= cv2.goodFeaturesToTrack(gray_Master_logo,100, 0.04, 1.0) # (gray_Master_logo,40, 0.04, 1.0)
+     selectedkps=[]
+     if gftt_corners==None:
+        return selectedkps
      print "all GFTT ",len(gftt_corners)
      ###for p in gftt_corners:
      ###     cv2.circle(gray_Master_logo, (int(p[0][0]),int(p[0][1])) ,7,  cv2.cv.Scalar(0, 0, 255, 0), thickness=2, lineType=4)#lineType=cv2.CV_AA          
      #selecting from kp_master_logo the keypoint near to gftt_corners
-     selectedkps=[]
      for gp in gftt_corners:
            for kp in kp_master_logo:
-                 if  (abs(kp.pt[0] - gp[0,0]) < 2)	 and (abs(kp.pt[1] - gp[0,1]) < 2):
+                 if  (abs(kp.pt[0] - gp[0,0]) < 2) and (abs(kp.pt[1] - gp[0,1]) < 2):
                       selectedkps.append(kp)
-     # print selectedkps
-     print "number of GFTT that match the features already extracted ",len(selectedkps)
-     # construct selecteddesc from the kp2dsc_dict and the selected keypoints
-     selecteddescs=np.vstack((kp2dsc_dict[selectedkps[0]],kp2dsc_dict[selectedkps[1]])) 
-     for i in range(2,len(selectedkps)):
-          selecteddescs=np.vstack((selecteddescs,kp2dsc_dict[selectedkps[i]])) 
-     return selectedkps , selecteddescs
+     return selectedkps
         
-def sort_keypoints_and_descriptors(kps,kp2dsc_dict,by,percent):
-     #print kp2dsc_dict
-     # sorting the keypoints list
-     if by=='size':
-         sortedkps = sorted(kps, key=lambda item:item.size, reverse=True) # True= larger is at kps[0]
-     if by=='stringth': 
-         sortedkps = sorted(kps, key=lambda item:item.response, reverse=True)
-     if by=='octave': 
-         sortedkps = sorted(kps, key=lambda item: item.octave, reverse=True)
-     if by=='angle': 
-         sortedkps = sorted(kps, key=lambda item: item.angle, reverse=True)
-     #select the first 20%  of sorted keypoints
-     sortedkps=sortedkps[:int((percent/100)*len(sortedkps))]
-     # construct sorted desc from the kp2dsc_dict and the sorted keypoints
-     sorteddsc=np.vstack((kp2dsc_dict[sortedkps[0]],kp2dsc_dict[sortedkps[1]])) 
-     for i in range(2,len(sortedkps)):
-          sorteddsc=np.vstack((sorteddsc,kp2dsc_dict[sortedkps[i]])) 
-     #print sorteddsc
-     return list(sortedkps), sorteddsc 
+#def sort_keypoints_and_descriptors(kps,kp2dsc_dict,by,percent):
+#     #print kp2dsc_dict
+#     # sorting the keypoints list
+#     if by=='size':
+#         sortedkps = sorted(kps, key=lambda item: item.size, reverse=True) # True= larger is at kps[0]
+#     if by=='stringth': 
+#         sortedkps = sorted(kps, key=lambda item: item.response, reverse=True)
+#     if by=='octave': 
+#         sortedkps = sorted(kps, key=lambda item: item.octave, reverse=True)
+#     if by=='angle': 
+#         sortedkps = sorted(kps, key=lambda item: item.angle, reverse=True)
+#     #select the first 20%  of sorted keypoints
+#     sortedkps=sortedkps[:int((percent/100)*len(sortedkps))]
+#     # construct sorted desc from the kp2dsc_dict and the sorted keypoints
+#     sorteddsc=np.vstack((kp2dsc_dict[sortedkps[0]],kp2dsc_dict[sortedkps[1]])) 
+#     for i in range(2,len(sortedkps)):
+#          sorteddsc=np.vstack((sorteddsc,kp2dsc_dict[sortedkps[i]])) 
+#     #print sorteddsc
+#     return list(sortedkps), sorteddsc 
      
 def extract_and_select_features_from_logo(gray_Master_logo,extended,by,percent,dir,gftt):   
     surf = cv2.SURF(100,4,4,extended) # gives very large number of features
-    kp_master_logo, desc_master_logo = surf.detect(gray_Master_logo, None, False)
+    kps, desc_master_logo = surf.detect(gray_Master_logo, None, False)
     desc_master_logo.shape = (-1, surf.descriptorSize()) 
-    #creating dict to map points to dscs  (not using zip because it returns tuple and I want numpy.ndarray)
+    MSG= "Number of detected keypoints in the master logo: {0}\n".format(len(kps))
+    #creating dict to map points to descs  (not using zip because it returns tuple and I want numpy.ndarray)
     kp2dsc_dict={}
-    for i in range(len(kp_master_logo)):
-           kp2dsc_dict[kp_master_logo[i]]=desc_master_logo[i,:]
-    # sort keypoints according to by, and select the percent represented by percent
-    kp_master_logo, desc_master_logo =sort_keypoints_and_descriptors(kp_master_logo,kp2dsc_dict,by,float(percent))
-    print "after sort\n"
-    for p  in kp_master_logo:
+    for i in range(len(kps)):
+           kp2dsc_dict[kps[i]]=desc_master_logo[i,:]
+    # sorting the keypoints list
+    if by=='size':
+        sortedkps = sorted(kps, key=lambda item: item.size, reverse=True) # True= larger is at kps[0]
+    elif by=='stringth': 
+        sortedkps = sorted(kps, key=lambda item: item.response, reverse=True)
+    elif by=='octave': 
+        sortedkps = sorted(kps, key=lambda item: item.octave, reverse=True)
+    elif by=='angle': 
+        sortedkps = sorted(kps, key=lambda item: item.angle, reverse=True)
+    else:
+         print "Unknown sort key", by 
+    #select the first 20%  of sorted keypoints
+    sel_kps=sortedkps[:int((float(percent)/100)*len(sortedkps))] # the selected sorted keypoints
+    MSG+="Number of selected keypoints by sort: {0}\n".format(len (sel_kps))
+    rem_kps=sortedkps[int((float(percent)/100)*len(sortedkps)):] #the remaining sorted keypoints
+    MSG+="Number of remaining keypoints by sort: {0}\n".format(len(rem_kps)) 
+    #print "after sort\n"
+    for p  in kps:
           #print p.pt, p.size, p.angle, p.response, p.octave, p.class_id, '\n'
           cv2.circle(gray_Master_logo, (int(p.pt[0]),int(p.pt[1])) ,3,  cv2.cv.Scalar(0, 0, 255, 0), thickness=1, lineType=4)#lineType=cv2.CV_AA
-    if gftt=="gftt":
-          kp_master_logo, desc_master_logo=find_GFTT(gray_Master_logo,kp_master_logo,kp2dsc_dict)
-          for p  in kp_master_logo:
+
+    for p  in sel_kps:
+          #print p.pt, p.size, p.angle, p.response, p.octave, p.class_id, '\n'
+          cv2.circle(gray_Master_logo, (int(p.pt[0]),int(p.pt[1])) ,3,  cv2.cv.Scalar(0, 255, 0, 0), thickness=3, lineType=4)#lineType=cv2.CV_AA
+
+    if gftt=="gftt": # find gftt from the remaining sorted keypoints 
+          gftt_kps=find_GFTT(gray_Master_logo,rem_kps,kp2dsc_dict)
+          MSG+="Number of added keypoints by GFTT: {0}\n".format(len(gftt_kps))
+          for p  in gftt_kps:
                 #print p.pt, p.size, p.angle, p.response, p.octave, p.class_id, '\n'
-                cv2.circle(gray_Master_logo, (int(p.pt[0]),int(p.pt[1])) ,5,  cv2.cv.Scalar(0, 0, 255, 0), thickness=1, lineType=4)
+                cv2.circle(gray_Master_logo, (int(p.pt[0]),int(p.pt[1])) ,7,  cv2.cv.Scalar(255, 0, 0, 0), thickness=1, lineType=4)
+
+	  sel_kps.extend(gftt_kps)
+
+    MSG+= "Final number of selected keypoints from master logo: {0}\n".format(len(sel_kps)) 
+    # construct sorted desc from the kp2dsc_dict and the sorted keypoints
+    sorteddsc=np.vstack((kp2dsc_dict[sel_kps[0]],kp2dsc_dict[sel_kps[1]])) 
+    for i in range(2,len(sel_kps)):
+         sorteddsc=np.vstack((sorteddsc,kp2dsc_dict[sel_kps[i]])) 
+  
+    kp_master_logo, desc_master_logo =list(sel_kps),sorteddsc
+    print MSG
     cv2.imshow("features from logo",gray_Master_logo)
     cv2.imwrite("./"+dir+"/featuresfromlogo.png",gray_Master_logo)
-    return kp_master_logo , desc_master_logo
+    return kps , desc_master_logo, MSG 
     
 def match(match_func,desc1, desc2,):
 	m=match_func(desc1,desc2)
 	return m
+
 def match_flann(desc1, desc2, r_threshold = 0.6):
     flann = cv2.flann_Index(desc2, flann_params)
     idx2, dist = flann.knnSearch(desc1, 2, params = {}) # bug: need to provide empty dict
@@ -137,16 +166,20 @@ def ReadVideoProps(video_capture):
         return props
 
 
-def export_features(x,y,y1):
+def export_features(x,y,y1,dir):
         import matplotlib.pyplot as plt
         f=plt.figure()
         plt.plot(x,y,color='green', linestyle='dashed')
-        plt.title('Number of matched features per frame')
+        plt.title('Number of matched features per frame\n'+dir)
         plt.savefig("./"+dir+"/Matched_features.png" )
         plt.figure()
         plt.plot(x,y1,color='red', linestyle='dashed')
-        plt.title('Number of detected features per frame')
+        plt.title('Number of detected features per frame\n'+dir)
         plt.savefig("./"+dir+"/Detected_features.png") 
+        plt.figure()
+        plt.plot(x,y/y1,color='red', linestyle='dashed')
+        plt.title('Ratio of matched to detected features\n'+dir)
+        plt.savefig("./"+dir+"/ratio.png") 
         #plt.show()
 
 if __name__ == '__main__':
@@ -181,9 +214,8 @@ if __name__ == '__main__':
     #Estimated_Video_Length=float(FRAME_COUNT)/FPS
     #gray_frame=cv2.cv.CreateMatND((FRAME_WIDTH ,FRAME_HEIGHT) , cv2.CV_8UC1)# CreateImage(, cv2.cv.IPL_DEPTH_8U, 1)
     # ds_gray_frame=CreateImage((FRAME_WIDTH/2 ,FRAME_HEIGHT/2), cv2.cv.IPL_DEPTH_8U, 1)
-    kp_master_logo, desc_master_logo = extract_and_select_features_from_logo(gray_Master_logo,extended,logoKPsort,logoKPsortpercent,dir,gftt) 
-
-    print "Number of features selected from the master logo: ", len(kp_master_logo)
+    kp_master_logo, desc_master_logo, MSG = extract_and_select_features_from_logo(gray_Master_logo,extended,logoKPsort,logoKPsortpercent,dir,gftt) 
+    
     surf = cv2.SURF(1000,4,4,extended)
     #cv2.startWindowThread()
     #cv2.namedWindow("test")
@@ -227,6 +259,8 @@ if __name__ == '__main__':
 
     total_time=time()-t_start
     features_txt_file.write(
+'\n==============================LOGO FEATURES===============================\n'
++MSG+
 '\n==============================VIDEO FEATURES==============================\n'
 +''.join([' %s: %s \n' % (key, value) for (key, value) in props.items()])+
 '\n=============================MATCHED FEATURES=============================\n')
@@ -234,7 +268,7 @@ if __name__ == '__main__':
           features_txt_file.write(str(num_features)+"\t features, matched\t @ " +str(t)+"\n")
     features_txt_file.close()
     print "Total execution time=", total_time, "sec"
-    export_features(sampling_times,matched_features,number_of_features)
+    export_features(sampling_times,matched_features,number_of_features,dir)
     cv2.waitKey()     
     video_capture.release()
     
