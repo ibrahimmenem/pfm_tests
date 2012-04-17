@@ -7,14 +7,38 @@ from common import anorm
 from time import time
 #sudo apt-get install python-matplotlib
 help_message = '''
-USAGE: video_cv2_pythn.py [ <video file full path> <logo file full path> <64 | 128> <BF|FLANN> <FPS> <size|octave|angle|stringth > <(0->100)> <GFTT>]
+USAGE: video_cv2_pythn.py [ <video file full path> <logo file full path> <64 | 128> <BF|FLANN> <FPS> <size|octave|angle|stringth > <(0->100)> <NOGFTT | GFTT> <0 | 1 |2>]
+
+<64 | 128>                   : Descriptor length 64 or 128 
+<BF|FLANN>                   : Match algorithm Brute force  
+<FPS>                        : Processed frame rate
+<size|octave|angle|stringth> : Select features sort key
+<(0->100)>                   : Percent of used sorted features 
+<NOGFTT | GFTT>              : Use or not good features to track 
+< 0 | 1 | 2 >                : DownScale 0, 1 or 2 times
 '''
 FLANN_INDEX_KDTREE = 1  
 flann_params = dict(algorithm = FLANN_INDEX_KDTREE,trees = 4)
 
+def spacial_downscale_function(spacial_DS):
+	if spacial_DS==0:
+	   def SDS(gray_frame):
+	       return gray_frame
+
+	elif spacial_DS==1:
+	   def SDS(gray_frame):
+	       return cv2.pyrDown(gray_frame)
+	       
+	else:
+	   def SDS(gray_frame):
+	       return cv2.pyrDown(cv2.pyrDown(gray_frame))
+	       
+	return SDS
+
 def find_GFTT(gray_Master_logo,kp_master_logo,kp2dsc_dict):
     #goodFeaturesToTrack(image, maxCorners, qualityLevel, minDistance[, corners[, mask[, blockSize[, useHarrisDetector[, k]]]]]) -> corners
      gftt_corners= cv2.goodFeaturesToTrack(gray_Master_logo,40, 0.04, 1.0)
+     print "all GFTT ",len(gftt_corners)
      ###for p in gftt_corners:
      ###     cv2.circle(gray_Master_logo, (int(p[0][0]),int(p[0][1])) ,7,  cv2.cv.Scalar(0, 0, 255, 0), thickness=2, lineType=4)#lineType=cv2.CV_AA          
      #selecting from kp_master_logo the keypoint near to gftt_corners
@@ -23,7 +47,8 @@ def find_GFTT(gray_Master_logo,kp_master_logo,kp2dsc_dict):
            for kp in kp_master_logo:
                  if  (abs(kp.pt[0] - gp[0,0]) < 2)	 and (abs(kp.pt[1] - gp[0,1]) < 2):
                       selectedkps.append(kp)
-     print selectedkps
+     # print selectedkps
+     print "number of GFTT that match the features already extracted ",len(selectedkps)
      # construct selecteddesc from the kp2dsc_dict and the selected keypoints
      selecteddescs=np.vstack((kp2dsc_dict[selectedkps[0]],kp2dsc_dict[selectedkps[1]])) 
      for i in range(2,len(selectedkps)):
@@ -50,8 +75,8 @@ def sort_keypoints_and_descriptors(kps,kp2dsc_dict,by,percent):
      #print sorteddsc
      return list(sortedkps), sorteddsc 
      
-def extract_features_from_logo(gray_Master_logo,extended,by,percent,dir,gftt):   
-    surf = cv2.SURF(100,4,4,extended) # gives large number of features
+def extract_and_select_features_from_logo(gray_Master_logo,extended,by,percent,dir,gftt):   
+    surf = cv2.SURF(100,4,4,extended) # gives very large number of features
     kp_master_logo, desc_master_logo = surf.detect(gray_Master_logo, None, False)
     desc_master_logo.shape = (-1, surf.descriptorSize()) 
     #creating dict to map points to dscs  (not using zip because it returns tuple and I want numpy.ndarray)
@@ -60,15 +85,15 @@ def extract_features_from_logo(gray_Master_logo,extended,by,percent,dir,gftt):
            kp2dsc_dict[kp_master_logo[i]]=desc_master_logo[i,:]
     # sort keypoints according to by, and select the percent represented by percent
     kp_master_logo, desc_master_logo =sort_keypoints_and_descriptors(kp_master_logo,kp2dsc_dict,by,float(percent))
-    print "after sort"
+    print "after sort\n"
     for p  in kp_master_logo:
-          print p.pt, p.size, p.angle, p.response, p.octave, p.class_id, '\n'
+          #print p.pt, p.size, p.angle, p.response, p.octave, p.class_id, '\n'
           cv2.circle(gray_Master_logo, (int(p.pt[0]),int(p.pt[1])) ,3,  cv2.cv.Scalar(0, 0, 255, 0), thickness=1, lineType=4)#lineType=cv2.CV_AA
     if gftt=="gftt":
           kp_master_logo, desc_master_logo=find_GFTT(gray_Master_logo,kp_master_logo,kp2dsc_dict)
-    for p  in kp_master_logo:
-          print p.pt, p.size, p.angle, p.response, p.octave, p.class_id, '\n'
-          cv2.circle(gray_Master_logo, (int(p.pt[0]),int(p.pt[1])) ,5,  cv2.cv.Scalar(0, 0, 255, 0), thickness=1, lineType=4)
+          for p  in kp_master_logo:
+                #print p.pt, p.size, p.angle, p.response, p.octave, p.class_id, '\n'
+                cv2.circle(gray_Master_logo, (int(p.pt[0]),int(p.pt[1])) ,5,  cv2.cv.Scalar(0, 0, 255, 0), thickness=1, lineType=4)
     cv2.imshow("features from logo",gray_Master_logo)
     cv2.imwrite("./"+dir+"/featuresfromlogo.png",gray_Master_logo)
     return kp_master_logo , desc_master_logo
@@ -127,24 +152,25 @@ def export_features(x,y,y1):
 if __name__ == '__main__':
     try: 
         video_fn, logo_fn = sys.argv[1:3]  
-        desclength,matchfunction, DS_rate,logoKPsort,logoKPsortpercent,gftt=[x.lower() for x in sys.argv[3:9] ]
+        desclength,matchfunction, DSF_rate,logoKPsort,logoKPsortpercent,gftt,spacial_DS=[x.lower() for x in sys.argv[3:10] ]
         video_capture=cv2.VideoCapture(video_fn)
         video_capture.open(video_fn) 
         gray_Master_logo= cv2.imread(logo_fn, 0) 
         extended= (0, 1)[desclength=='128']
         match_function=(match_flann,match_bruteforce)[matchfunction=='bf']
-        DS_rate=int(DS_rate)
+        DSF_rate=int(DSF_rate) # frequency downscale rate
+        SDS=spacial_downscale_function(int(spacial_DS)) # spacial downscale function
     except ValueError:
         print  "*** No or bad input args!\n", help_message
         sys.exit(1)     
-    dir=os.path.split(video_fn)[1]+"_"+os.path.split(logo_fn)[1]+"_len:"+desclength+"_"+matchfunction+"_fps:"+str(DS_rate)+"_sort:"+logoKPsort+"_"+logoKPsortpercent
+    dir=os.path.split(video_fn)[1]+"_"+os.path.split(logo_fn)[1]+"_len:"+desclength+"_"+matchfunction+"_fps:"+str(DSF_rate)+"_sort:"+logoKPsort+"_"+logoKPsortpercent+"_"+str(gftt)+"_DS_"+str(spacial_DS)
     try: 
           os.system("rm -r "+dir)
           os.system("mkdir "+dir)
     except: os.system("mkdir "+dir)
     features_txt_file=open("./"+dir+"/features_txt_file.txt",'w')
     #os.system("rm ./"+dir+"/*.png")
-    retval,frame=video_capture.read()
+    _,frame=video_capture.read()
     props= ReadVideoProps(video_capture)
     print props
     #FRAME_WIDTH=int(props['FRAME_WIDTH'])
@@ -155,9 +181,9 @@ if __name__ == '__main__':
     #Estimated_Video_Length=float(FRAME_COUNT)/FPS
     #gray_frame=cv2.cv.CreateMatND((FRAME_WIDTH ,FRAME_HEIGHT) , cv2.CV_8UC1)# CreateImage(, cv2.cv.IPL_DEPTH_8U, 1)
     # ds_gray_frame=CreateImage((FRAME_WIDTH/2 ,FRAME_HEIGHT/2), cv2.cv.IPL_DEPTH_8U, 1)
-    kp_master_logo, desc_master_logo = extract_features_from_logo(gray_Master_logo,extended,logoKPsort,logoKPsortpercent,dir,gftt) 
+    kp_master_logo, desc_master_logo = extract_and_select_features_from_logo(gray_Master_logo,extended,logoKPsort,logoKPsortpercent,dir,gftt) 
 
-    print "number of features in the master logo: ", len(kp_master_logo)
+    print "Number of features selected from the master logo: ", len(kp_master_logo)
     surf = cv2.SURF(1000,4,4,extended)
     #cv2.startWindowThread()
     #cv2.namedWindow("test")
@@ -165,18 +191,20 @@ if __name__ == '__main__':
     matched_features=np.array([])
     sampling_times=np.array([])
     number_of_features=np.array([])
-    #for j in range(FRAME_COUNT*DS_rate/FPS):
+    #for j in range(FRAME_COUNT*DSF_rate/FPS):
     while True:
-            for i in range(FPS/DS_rate):
+            for i in range(FPS/DSF_rate):
                  video_capture.grab()
                  Read_Frames=Read_Frames+1
             if Read_Frames>=FRAME_COUNT:
                   print "All frames have been read!"   
                   break
-            retval,frame=video_capture.retrieve()
+            print "Processing frame number {0} ".format(Read_Frames)
+            _,frame=video_capture.retrieve()
             gray_frame=cv2.cvtColor(frame, cv2.cv.CV_RGB2GRAY) 
-            ds_gray_frame=cv2.pyrDown(gray_frame)
-            #ds_gray_frame=cv2.pyrDown(ds_gray_frame)
+            ds_gray_frame=SDS(gray_frame)
+            #ds_gray_frame=cv2.pyrDown(gray_frame) # first spacial downscale
+            #ds_gray_frame=cv2.pyrDown(ds_gray_frame)  # secound spacial downscale 
             kp_frame, desc_frame = surf.detect(ds_gray_frame, None,False)
             try:
                  #cv2.waitKey()     
@@ -185,7 +213,7 @@ if __name__ == '__main__':
                  print "frame with no or insignificant features, skipped"    
                  continue  
             #m = match_flann(desc_frame, desc_master_logo)
-            m = match(match_flann,desc_frame, desc_master_logo)
+            m = match(match_function,desc_frame, desc_master_logo)
             number_of_features=np.append(number_of_features ,[len(desc_frame)])
             matched_features=np.append(matched_features,[len(m)])
             sampling_times=np.append(sampling_times,[float(Read_Frames)/FPS ]) 
