@@ -6,6 +6,7 @@ import numpy as np
 from common import anorm
 from time import time
 #sudo apt-get install python-matplotlib
+outputfolder="./output/"
 help_message = '''
 USAGE: video_cv2_pythn.py [ <video file full path> <logo file full path> <64 | 128> <BF|FLANN> <FPS> <size|octave|angle|stringth > <(0->100)> <NOGFTT | GFTT> <0 | 1 |2>]
 
@@ -71,7 +72,7 @@ def find_GFTT(gray_Master_logo,kp_master_logo,kp2dsc_dict):
 #     #print sorteddsc
 #     return list(sortedkps), sorteddsc 
      
-def extract_and_select_features_from_logo(gray_Master_logo,extended,by,percent,dir,gftt):   
+def extract_and_select_features_from_logo(Master_logo,gray_Master_logo,extended,by,percent,dir,gftt):   
     surf = cv2.SURF(100,4,4,extended) # gives very large number of features
     kps, desc_master_logo = surf.detect(gray_Master_logo, None, False)
     desc_master_logo.shape = (-1, surf.descriptorSize()) 
@@ -81,7 +82,7 @@ def extract_and_select_features_from_logo(gray_Master_logo,extended,by,percent,d
     for i in range(len(kps)):
            kp2dsc_dict[kps[i]]=desc_master_logo[i,:]
     # sorting the keypoints list
-    if by=='size':
+    if   by=='size':
         sortedkps = sorted(kps, key=lambda item: item.size, reverse=True) # True= larger is at kps[0]
     elif by=='stringth': 
         sortedkps = sorted(kps, key=lambda item: item.response, reverse=True)
@@ -90,7 +91,7 @@ def extract_and_select_features_from_logo(gray_Master_logo,extended,by,percent,d
     elif by=='angle': 
         sortedkps = sorted(kps, key=lambda item: item.angle, reverse=True)
     else:
-         print "Unknown sort key", by 
+         print "Unknown sort key: ", by 
     #select the first 20%  of sorted keypoints
     sel_kps=sortedkps[:int((float(percent)/100)*len(sortedkps))] # the selected sorted keypoints
     MSG+="Number of selected keypoints by sort: {0}\n".format(len (sel_kps))
@@ -99,18 +100,18 @@ def extract_and_select_features_from_logo(gray_Master_logo,extended,by,percent,d
     #print "after sort\n"
     for p  in kps:
           #print p.pt, p.size, p.angle, p.response, p.octave, p.class_id, '\n'
-          cv2.circle(gray_Master_logo, (int(p.pt[0]),int(p.pt[1])) ,3,  cv2.cv.Scalar(0, 0, 255, 0), thickness=1, lineType=4)#lineType=cv2.CV_AA
+          cv2.circle(Master_logo, (int(p.pt[0]),int(p.pt[1])) ,3,  cv2.cv.Scalar(0, 0, 255, 0), thickness=1, lineType=4)#lineType=cv2.CV_AA
 
     for p  in sel_kps:
           #print p.pt, p.size, p.angle, p.response, p.octave, p.class_id, '\n'
-          cv2.circle(gray_Master_logo, (int(p.pt[0]),int(p.pt[1])) ,3,  cv2.cv.Scalar(0, 255, 0, 0), thickness=3, lineType=4)#lineType=cv2.CV_AA
+          cv2.circle(Master_logo, (int(p.pt[0]),int(p.pt[1])) ,3,  cv2.cv.Scalar(0, 255, 0, 0), thickness=1, lineType=4)#lineType=cv2.CV_AA
 
     if gftt=="gftt": # find gftt from the remaining sorted keypoints 
           gftt_kps=find_GFTT(gray_Master_logo,rem_kps,kp2dsc_dict)
           MSG+="Number of added keypoints by GFTT: {0}\n".format(len(gftt_kps))
           for p  in gftt_kps:
                 #print p.pt, p.size, p.angle, p.response, p.octave, p.class_id, '\n'
-                cv2.circle(gray_Master_logo, (int(p.pt[0]),int(p.pt[1])) ,7,  cv2.cv.Scalar(255, 0, 0, 0), thickness=1, lineType=4)
+                cv2.circle(Master_logo, (int(p.pt[0]),int(p.pt[1])) ,7,  cv2.cv.Scalar(255, 0, 0, 0), thickness=1, lineType=4)
 
 	  sel_kps.extend(gftt_kps)
 
@@ -122,8 +123,8 @@ def extract_and_select_features_from_logo(gray_Master_logo,extended,by,percent,d
   
     kp_master_logo, desc_master_logo =list(sel_kps),sorteddsc
     print MSG
-    cv2.imshow("features from logo",gray_Master_logo)
-    cv2.imwrite("./"+dir+"/featuresfromlogo.png",gray_Master_logo)
+    #cv2.imshow("features from logo",Master_logo)
+    cv2.imwrite(outputfolder+dir+"/featuresfromlogo.png",Master_logo)
     return kps , desc_master_logo, MSG 
     
 def match(match_func,desc1, desc2,):
@@ -171,16 +172,17 @@ def export_features(x,y,y1,dir):
         f=plt.figure()
         plt.plot(x,y,color='green', linestyle='dashed')
         plt.title('Number of matched features per frame\n'+dir)
-        plt.savefig("./"+dir+"/Matched_features.png" )
+        plt.savefig(outputfolder+dir+"/Matched_features.png" )
         plt.figure()
         plt.plot(x,y1,color='red', linestyle='dashed')
         plt.title('Number of detected features per frame\n'+dir)
-        plt.savefig("./"+dir+"/Detected_features.png") 
+        plt.savefig(outputfolder+dir+"/Detected_features.png") 
         plt.figure()
-        plt.plot(x,y/y1,color='red', linestyle='dashed')
+        plt.plot(x,y/y1,color='blue', linestyle='dashed')
         plt.title('Ratio of matched to detected features\n'+dir)
-        plt.savefig("./"+dir+"/ratio.png") 
+        plt.savefig(outputfolder+dir+"/ratio.png") 
         #plt.show()
+
 
 if __name__ == '__main__':
     try: 
@@ -188,7 +190,7 @@ if __name__ == '__main__':
         desclength,matchfunction, DSF_rate,logoKPsort,logoKPsortpercent,gftt,spacial_DS=[x.lower() for x in sys.argv[3:10] ]
         video_capture=cv2.VideoCapture(video_fn)
         video_capture.open(video_fn) 
-        gray_Master_logo= cv2.imread(logo_fn, 0) 
+        Master_logo= cv2.imread(logo_fn, 1) 
         extended= (0, 1)[desclength=='128']
         match_function=(match_flann,match_bruteforce)[matchfunction=='bf']
         DSF_rate=int(DSF_rate) # frequency downscale rate
@@ -198,10 +200,10 @@ if __name__ == '__main__':
         sys.exit(1)     
     dir=os.path.split(video_fn)[1]+"_"+os.path.split(logo_fn)[1]+"_len:"+desclength+"_"+matchfunction+"_fps:"+str(DSF_rate)+"_sort:"+logoKPsort+"_"+logoKPsortpercent+"_"+str(gftt)+"_DS_"+str(spacial_DS)
     try: 
-          os.system("rm -r "+dir)
-          os.system("mkdir "+dir)
-    except: os.system("mkdir "+dir)
-    features_txt_file=open("./"+dir+"/features_txt_file.txt",'w')
+          os.system("rm -r "+outputfolder+dir)
+          os.system("mkdir "+outputfolder+dir)
+    except: os.system("mkdir "+outputfolder+dir)
+    features_txt_file=open(outputfolder+dir+"/features_txt_file.txt",'w')
     #os.system("rm ./"+dir+"/*.png")
     _,frame=video_capture.read()
     props= ReadVideoProps(video_capture)
@@ -214,7 +216,8 @@ if __name__ == '__main__':
     #Estimated_Video_Length=float(FRAME_COUNT)/FPS
     #gray_frame=cv2.cv.CreateMatND((FRAME_WIDTH ,FRAME_HEIGHT) , cv2.CV_8UC1)# CreateImage(, cv2.cv.IPL_DEPTH_8U, 1)
     # ds_gray_frame=CreateImage((FRAME_WIDTH/2 ,FRAME_HEIGHT/2), cv2.cv.IPL_DEPTH_8U, 1)
-    kp_master_logo, desc_master_logo, MSG = extract_and_select_features_from_logo(gray_Master_logo,extended,logoKPsort,logoKPsortpercent,dir,gftt) 
+    gray_Master_logo=cv2.cvtColor(Master_logo, cv2.cv.CV_RGB2GRAY); 
+    kp_master_logo, desc_master_logo, MSG = extract_and_select_features_from_logo(Master_logo,gray_Master_logo,extended,logoKPsort,logoKPsortpercent,dir,gftt) 
     
     surf = cv2.SURF(1000,4,4,extended)
     #cv2.startWindowThread()
@@ -258,6 +261,7 @@ if __name__ == '__main__':
             #      break
 
     total_time=time()-t_start
+    features_txt_file.write("Exec time: {0} sec \n per total frame count: {1} sec\n".format( total_time,total_time/FRAME_COUNT))
     features_txt_file.write(
 '\n==============================LOGO FEATURES===============================\n'
 +MSG+
