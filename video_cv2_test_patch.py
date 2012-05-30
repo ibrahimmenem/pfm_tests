@@ -274,7 +274,7 @@ if __name__ == '__main__':
     matches_file.close()
     #print "Total execution time=", total_time, "sec"
     export_features(sampling_times,matched_features,number_of_features,dir)
-   #cv2.waitKey()     
+    #cv2.waitKey()     
     video_capture.release()
     
     
